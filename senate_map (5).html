@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Election Zone – 2026 Senate Map</title>
+  <style>
+    /* Overall page styling */
+    body {
+      margin: 0;
+      background: radial-gradient(ellipse at center, #2b2b2b 0%, #121212 100%);
+      color: white;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    /* Logo positioning */
+    .logo {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      width: 100px;
+      z-index: 10;
+    }
+
+    /* Title styling */
+    .title {
+      position: absolute;
+      top: 15px;
+      left: 120px;
+      font-size: 24px;
+      color: white;
+      font-weight: bold;
+      z-index: 10;
+    }
+
+    /* Container that holds the SVG map */
+    .map-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 300px;
+      bottom: 50px;
+      overflow: auto;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    /* Sidebar for displaying seat counts and demographics */
+    .sidebar {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 300px;
+      height: calc(100% - 50px);
+      background-color: #2a2a2a;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+
+    /* Footer styling */
+    .footer {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 50px;
+      background: #111;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* Bar showing seat distribution */
+    .seat-bar {
+      display: flex;
+      height: 20px;
+      width: 100%;
+      margin-top: 20px;
+      background: #555;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .bar-segment {
+      height: 100%;
+      transition: width 0.5s ease;
+    }
+
+    /* Party selector buttons */
+    .party-selector {
+      position: absolute;
+      top: 10px;
+      right: 320px;
+      z-index: 10;
+      display: flex;
+      gap: 10px;
+    }
+    .party-button {
+      border: none;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-weight: bold;
+      border-radius: 4px;
+      color: white;
+    }
+
+    svg path {
+      cursor: pointer;
+      stroke: #000;
+      stroke-width: 1;
+    }
+
+    /* Ensure the inserted SVG scales responsively and is centered */
+    #us-map svg {
+      max-width: 90%;
+      height: auto;
+    }
+
+    /* Tooltip styling */
+    .tooltip {
+      position: absolute;
+      padding: 5px 10px;
+      background: #333;
+      color: white;
+      border-radius: 4px;
+      pointer-events: none;
+      font-size: 14px;
+      display: none;
+      z-index: 100;
+    }
+  </style>
+</head>
+<body>
+  <!-- Party selector buttons -->
+  <div class="party-selector">
+    <button class="party-button" data-party="rep" style="background:#d84a4a">Republican</button>
+    <button class="party-button" data-party="dem" style="background:#2e74d7">Democrat</button>
+    <button class="party-button" data-party="independent" style="background:#4CAF50">Independent</button>
+    <button class="party-button" data-party="undecided" style="background:#ccc; color:black">Undecided</button>
+  </div>
+
+  <!-- Election Zone logo -->
+  <img alt="Election Zone Logo" class="logo" src="logo.png">
+
+  <!-- Title -->
+  <h1 class="title">Election Zone Senate Map</h1>
+
+  <!-- Container for the SVG map -->
+  <div class="map-container">
+    <div id="us-map">
+      <!-- The SVG will be loaded here via fetch -->
+    </div>
+  </div>
+
+  <!-- Sidebar showing seat counts and controls -->
+  <div class="sidebar">
+    <div class="seat-bar">
+      <div class="bar-segment" id="bar-dem" style="background:#2e74d7; width:0%"></div>
+      <div class="bar-segment" id="bar-rep" style="background:#d84a4a; width:0%"></div>
+      <div class="bar-segment" id="bar-ind" style="background:#4CAF50; width:0%"></div>
+      <div class="bar-segment" id="bar-und" style="background:#ccc; width:100%"></div>
+    </div>
+    <h2>Senate Seats</h2>
+    <div class="ev-count" id="dem-seats">Democrat: 0</div>
+    <div class="ev-count" id="rep-seats">Republican: 0</div>
+    <div class="ev-count" id="ind-seats">Independent: 0</div>
+    <div class="ev-count" id="und-seats">Undecided: 35</div>
+    <button onclick="resetMap()">Reset Map</button>
+    <button onclick="saveMapState()">Save State</button>
+    <button onclick="loadMapState()">Load State</button>
+    <button onclick="exportMap()">Export as PNG</button>
+
+    <!-- Turnout scenario controls -->
+    <div style="margin-top: 20px;">
+      <h3>Turnout Scenario</h3>
+      <!-- White men -->
+      <div style="margin-bottom: 6px;">
+        <label>White men: <span id="white-men-val">50</span>%</label>
+        <input type="range" id="white-men-turnout" min="0" max="100" value="50"
+               oninput="document.getElementById('white-men-val').innerText=this.value">
+      </div>
+      <!-- White women -->
+      <div style="margin-bottom: 6px;">
+        <label>White women: <span id="white-women-val">50</span>%</label>
+        <input type="range" id="white-women-turnout" min="0" max="100" value="50"
+               oninput="document.getElementById('white-women-val').innerText=this.value">
+      </div>
+      <!-- Black men -->
+      <div style="margin-bottom: 6px;">
+        <label>Black men: <span id="black-men-val">50</span>%</label>
+        <input type="range" id="black-men-turnout" min="0" max="100" value="50"
+               oninput="document.getElementById('black-men-val').innerText=this.value">
+      </div>
+      <!-- Black women -->
+      <div style="margin-bottom: 6px;">
+        <label>Black women: <span id="black-women-val">50</span>%</label>
+        <input type="range" id="black-women-turnout" min="0" max="100" value="50"
+               oninput="document.getElementById('black-women-val').innerText=this.value">
+      </div>
+      <!-- Latino men -->
+      <div style="margin-bottom: 6px;">
+        <label>Latino men: <span id="latino-men-val">50</span>%</label>
+        <input type="range" id="latino-men-turnout" min="0" max="100" value="50"
+               oninput="document.getElementById('latino-men-val').innerText=this.value">
+      </div>
+      <!-- Latino women -->
+      <div style="margin-bottom: 6px;">
+        <label>Latino women: <span id="latino-women-val">50</span>%</label>
+        <input type="range" id="latino-women-turnout" min="0" max="100" value="50"
+               oninput="document.getElementById('latino-women-val').innerText=this.value">
+      </div>
+      <!-- Asian men -->
+      <div style="margin-bottom: 6px;">
+        <label>Asian men: <span id="asian-men-val">50</span>%</label>
+        <input type="range" id="asian-men-turnout" min="0" max="100" value="50"
+               oninput="document.getElementById('asian-men-val').innerText=this.value">
+      </div>
+      <!-- Asian women -->
+      <div style="margin-bottom: 6px;">
+        <label>Asian women: <span id="asian-women-val">50</span>%</label>
+        <input type="range" id="asian-women-turnout" min="0" max="100" value="50"
+               oninput="document.getElementById('asian-women-val').innerText=this.value">
+      </div>
+      <button onclick="applyScenario()">Apply Scenario</button>
+    </div>
+    <div id="demographic-info" style="margin-top: 20px;">
+      <h3>Demographics</h3>
+      <div id="demo-content">Click a state to see demographics.</div>
+    </div>
+  </div>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <div class="footer">
+    Election Zone © 2025 Mock Simulator
+  </div>
+
+  <!-- Include html2canvas for exporting the map to PNG -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <script>
+    // Mapping of party identifiers to their colours
+    const colors = {
+      rep: '#d84a4a',
+      dem: '#2e74d7',
+      independent: '#4CAF50',
+      undecided: '#cccccc',
+      noElection: '#f9f9f9'
+    };
+
+    // Seats contested in the 2026 cycle
+    // Class II seats plus the special elections in Florida and Ohio
+    const contestedStates = new Set([
+      'AL','AK','AR','IA','KS','KY','LA','ME','MS','MT','NC','NE','OK','SC','SD','TN','TX','WV','WY','ID',
+      'FL','OH', // special elections
+      'CO','DE','IL','MA','MI','MN','NH','NJ','NM','OR','RI','VA','GA'
+    ]);
+
+    // seatData maps each state abbreviation to the number of Senate seats contested in 2026
+    const seatData = {};
+    // We'll fill seatData once we load the SVG and know all states
+
+        // Data describing which party holds the seats that are not up for election in
+        // 2026 (the Class I and Class III seats). For states without a Class II race
+        // this array contains two values (one for each seat). For states with a
+        // Class II race this value is a single string indicating the party that
+        // controls the other seat. These codes are used to colour non‑contested
+        // states and to initialise the seat counts.
+        const predeterminedSeats = {
+          // Non‑contested states (no Class II race in 2026)
+          AZ: ['dem','dem'],
+          CA: ['dem','dem'],
+          CT: ['dem','dem'],
+          HI: ['dem','dem'],
+          IN: ['rep','rep'],
+          MD: ['dem','dem'],
+          MO: ['rep','rep'],
+          ND: ['rep','rep'],
+          NV: ['dem','dem'],
+          NY: ['dem','dem'],
+          PA: ['rep','dem'],
+          UT: ['rep','rep'],
+          VT: ['dem','independent'],
+          WA: ['dem','dem'],
+          WI: ['rep','dem'],
+          // Contested states (one Class II seat up in 2026). These entries
+          // describe the party holding the other seat.
+          AL: 'rep',
+          AK: 'rep',
+          AR: 'rep',
+          IA: 'rep',
+          KS: 'rep',
+          KY: 'rep',
+          LA: 'rep',
+          ME: 'rep',
+          MS: 'rep',
+          MT: 'rep',
+          NC: 'rep',
+          NE: 'rep',
+          OK: 'rep',
+          SC: 'rep',
+          SD: 'rep',
+          TN: 'rep',
+          TX: 'rep',
+          WV: 'rep',
+          WY: 'rep',
+          ID: 'rep',
+          FL: 'rep',
+          OH: 'rep',
+          CO: 'dem',
+          DE: 'dem',
+          IL: 'dem',
+          MA: 'dem',
+          MI: 'dem',
+          MN: 'dem',
+          NH: 'dem',
+          NJ: 'dem',
+          NM: 'dem',
+          OR: 'dem',
+          RI: 'dem',
+          VA: 'dem',
+          GA: 'dem'
+        };
+
+        // Dark colours used to fill the non‑contested seats. These darker shades
+        // distinguish them from the interactive (contested) colours defined in
+        // the `colors` object above.
+        const darkColors = {
+          rep: '#8b0000',      // dark red
+          dem: '#1f3d7a',      // dark blue
+          independent: '#006400' // dark green
+        };
+
+    // Tracks the current party assignment for each state
+    const stateColors = {};
+    let selectedParty = 'undecided';
+
+    // Highlight the selected party button
+    function highlightSelectedParty() {
+      document.querySelectorAll('.party-button').forEach(btn => {
+        if (btn.dataset.party === selectedParty) {
+          btn.style.outline = '3px solid white';
+        } else {
+          btn.style.outline = 'none';
+        }
+      });
+    }
+
+    // Update the seat counts and bar widths
+    function updateSeats() {
+      // Accumulate seat counts for both predetermined and contested seats. 
+      // predeterminedSeats holds the non‑contested seats; stateColors holds the
+      // assignments for the contested seats (or 'undecided').
+      let dem = 0, rep = 0, ind = 0, undecided = 0;
+
+      // Count predetermined seats
+      Object.entries(predeterminedSeats).forEach(([state, entry]) => {
+        if (Array.isArray(entry)) {
+          entry.forEach(party => {
+            if (party === 'dem') dem += 1;
+            else if (party === 'rep') rep += 1;
+            else if (party === 'independent') ind += 1;
+          });
+        } else {
+          // single predetermined seat for contested states
+          const party = entry;
+          if (party === 'dem') dem += 1;
+          else if (party === 'rep') rep += 1;
+          else if (party === 'independent') ind += 1;
+        }
+      });
+
+      // Count contested seats based on user assignments
+      Object.keys(seatData).forEach(state => {
+        if (seatData[state] === 0) return; // skip states with no contested seat
+        const party = stateColors[state] || 'undecided';
+        if (party === 'dem') dem += 1;
+        else if (party === 'rep') rep += 1;
+        else if (party === 'independent') ind += 1;
+        else undecided += 1;
+      });
+
+      // There are always 100 Senate seats
+      const total = dem + rep + ind + undecided;
+      document.getElementById('dem-seats').innerText = `Democrat: ${dem}`;
+      document.getElementById('rep-seats').innerText = `Republican: ${rep}`;
+      document.getElementById('ind-seats').innerText = `Independent: ${ind}`;
+      document.getElementById('und-seats').innerText = `Undecided: ${undecided}`;
+      const percent = x => total > 0 ? (x / total) * 100 : 0;
+      document.getElementById('bar-dem').style.width = percent(dem) + '%';
+      document.getElementById('bar-rep').style.width = percent(rep) + '%';
+      document.getElementById('bar-ind').style.width = percent(ind) + '%';
+      document.getElementById('bar-und').style.width = percent(undecided) + '%';
+    }
+
+    // Demographics dataset (simplified; ranks from the presidential map)
+    const demographics = {
+      AL: { Age: 40, Education: 47, Income: 45 },
+      AK: { Age: 12, Education: 31, Income: 7 },
+      AZ: { Age: 11, Education: 30, Income: 38 },
+      AR: { Age: 42, Education: 49, Income: 48 },
+      CA: { Age: 35, Education: 15, Income: 6 },
+      CO: { Age: 25, Education: 2, Income: 9 },
+      CT: { Age: 6, Education: 4, Income: 3 },
+      DE: { Age: 26, Education: 17, Income: 16 },
+      FL: { Age: 5, Education: 36, Income: 27 },
+      GA: { Age: 18, Education: 33, Income: 34 },
+      HI: { Age: 9, Education: 18, Income: 4 },
+      ID: { Age: 20, Education: 39, Income: 40 },
+      IL: { Age: 22, Education: 21, Income: 15 },
+      IN: { Age: 34, Education: 43, Income: 35 },
+      IA: { Age: 28, Education: 14, Income: 25 },
+      KS: { Age: 27, Education: 23, Income: 30 },
+      KY: { Age: 44, Education: 45, Income: 44 },
+      LA: { Age: 43, Education: 50, Income: 50 },
+      ME: { Age: 1, Education: 16, Income: 28 },
+      MD: { Age: 13, Education: 5, Income: 1 },
+      MA: { Age: 8, Education: 1, Income: 2 },
+      MI: { Age: 29, Education: 25, Income: 32 },
+      MN: { Age: 21, Education: 6, Income: 11 },
+      MS: { Age: 48, Education: 48, Income: 49 },
+      MO: { Age: 33, Education: 37, Income: 36 },
+      MT: { Age: 10, Education: 34, Income: 33 },
+      NE: { Age: 30, Education: 22, Income: 23 },
+      NV: { Age: 14, Education: 44, Income: 31 },
+      NH: { Age: 4, Education: 3, Income: 8 },
+      NJ: { Age: 16, Education: 8, Income: 5 },
+      NM: { Age: 32, Education: 42, Income: 46 },
+      NY: { Age: 24, Education: 7, Income: 14 },
+      NC: { Age: 23, Education: 35, Income: 37 },
+      ND: { Age: 38, Education: 24, Income: 24 },
+      OH: { Age: 31, Education: 29, Income: 29 },
+      OK: { Age: 36, Education: 46, Income: 41 },
+      OR: { Age: 7, Education: 12, Income: 22 },
+      PA: { Age: 15, Education: 19, Income: 21 },
+      RI: { Age: 17, Education: 9, Income: 17 },
+      SC: { Age: 39, Education: 41, Income: 42 },
+      SD: { Age: 45, Education: 40, Income: 39 },
+      TN: { Age: 46, Education: 38, Income: 43 },
+      TX: { Age: 37, Education: 32, Income: 26 },
+      UT: { Age: 19, Education: 28, Income: 18 },
+      VT: { Age: 3, Education: 10, Income: 12 },
+      VA: { Age: 14, Education: 11, Income: 10 },
+      WA: { Age: 2, Education: 13, Income: 19 },
+      WV: { Age: 50, Education: 50, Income: 47 },
+      WI: { Age: 31, Education: 20, Income: 20 },
+      WY: { Age: 41, Education: 36, Income: 45 }
+    };
+
+    // Display demographic info for a given state
+    function updateDemographics(state) {
+      const info = demographics[state];
+      const contentDiv = document.getElementById('demo-content');
+      if (!info) {
+        contentDiv.innerHTML = 'No demographic data available.';
+        return;
+      }
+      contentDiv.innerHTML = `
+        <strong>${state}</strong><br>
+        Age rank: ${info.Age}<br>
+        Education rank: ${info.Education}<br>
+        Income rank: ${info.Income}
+      `;
+    }
+
+    // Reset all contested states to undecided
+    function resetMap() {
+      Object.keys(stateColors).forEach(state => {
+        const el = document.getElementById(state);
+        if (!el) return;
+        if (seatData[state] > 0) {
+          // Reset contested seats to undecided and colour them grey
+          stateColors[state] = 'undecided';
+          el.style.fill = colors.undecided;
+        } else {
+          // For non‑contested states, do not overwrite predetermined colours
+          stateColors[state] = 'noElection';
+        }
+      });
+      updateSeats();
+      localStorage.removeItem('senateMapState');
+    }
+
+    // Save current map state to localStorage
+    function saveMapState() {
+      // Only persist user selections for contested seats. Non‑contested states are
+      // fixed and need not be stored.
+      const save = {};
+      Object.keys(seatData).forEach(state => {
+        if (seatData[state] > 0) {
+          save[state] = stateColors[state];
+        }
+      });
+      localStorage.setItem('senateMapState', JSON.stringify(save));
+      alert('Map state saved!');
+    }
+
+    // Load map state from localStorage
+    function loadMapState() {
+      const saved = JSON.parse(localStorage.getItem('senateMapState'));
+      if (saved) {
+        Object.entries(saved).forEach(([state, party]) => {
+          // Only apply to contested states; skip non‑contested
+          if (seatData[state] > 0) {
+            const el = document.getElementById(state);
+            if (el && colors[party]) {
+              // Restore the user's assignment
+              stateColors[state] = party;
+              // Colour the state with the assigned party colour
+              el.style.fill = colors[party];
+            }
+          }
+        });
+        updateSeats();
+        alert('Map state loaded!');
+      }
+    }
+
+    // Export the current map view as a PNG
+    function exportMap() {
+      html2canvas(document.querySelector('.map-container')).then(canvas => {
+        const link = document.createElement('a');
+        link.download = 'senate-map.png';
+        link.href = canvas.toDataURL();
+        link.click();
+      });
+    }
+
+    /**
+     * Apply a turnout scenario to undecided contested states.  This function
+     * reads the current values of the white, Latino, black and Asian
+     * turnout sliders and assigns each undecided contested state to either
+     * the Democratic or Republican candidate based on a simple heuristic.
+     *
+     * For each contested state, we treat the party holding the other seat
+     * (from predeterminedSeats) as the "base" party: Republican states
+     * require high white turnout to hold, whereas Democratic states
+     * benefit from higher minority turnout.  If the minority turnout
+     * average exceeds the white turnout, states with a Republican base
+     * are flipped to Democratic; conversely, if white turnout exceeds
+     * the minority average, states with a Democratic base are flipped to
+     * Republican.  States already assigned by the user are not changed.
+     */
+    function applyScenario() {
+      // Read turnout sliders for each gender/race group
+      const wm = parseInt(document.getElementById('white-men-turnout').value, 10);
+      const ww = parseInt(document.getElementById('white-women-turnout').value, 10);
+      const bm = parseInt(document.getElementById('black-men-turnout').value, 10);
+      const bw = parseInt(document.getElementById('black-women-turnout').value, 10);
+      const lm = parseInt(document.getElementById('latino-men-turnout').value, 10);
+      const lw = parseInt(document.getElementById('latino-women-turnout').value, 10);
+      const am = parseInt(document.getElementById('asian-men-turnout').value, 10);
+      const aw = parseInt(document.getElementById('asian-women-turnout').value, 10);
+      // Define weight (Dem minus Rep) for each group based on averaged 2024 exit polls.
+      const weights = {
+        whiteMen: -22,
+        whiteWomen: -7,
+        blackMen: 56,
+        blackWomen: 85,
+        latinoMen: -10,
+        latinoWomen: 19,
+        asianMen: 15,
+        asianWomen: 16
+      };
+      // Compute an overall partisan score: positive favours Democrats, negative favours Republicans.
+      const score =
+        (wm - 50) * weights.whiteMen +
+        (ww - 50) * weights.whiteWomen +
+        (bm - 50) * weights.blackMen +
+        (bw - 50) * weights.blackWomen +
+        (lm - 50) * weights.latinoMen +
+        (lw - 50) * weights.latinoWomen +
+        (am - 50) * weights.asianMen +
+        (aw - 50) * weights.asianWomen;
+      Object.keys(seatData).forEach(state => {
+        if (seatData[state] > 0) {
+          if (stateColors[state] === 'undecided') {
+            // Assign party based on sign of score
+            stateColors[state] = score >= 0 ? 'dem' : 'rep';
+            const el = document.getElementById(state);
+            if (el) {
+              el.style.fill = colors[stateColors[state]];
+            }
+          }
+        }
+      });
+      updateSeats();
+    }
+
+    window.addEventListener('load', () => {
+      // Set up party button handlers
+      document.querySelectorAll('.party-button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          selectedParty = btn.dataset.party;
+          highlightSelectedParty();
+        });
+      });
+      highlightSelectedParty();
+
+      const tooltip = document.getElementById('tooltip');
+
+      // Fetch the SVG map from the current directory and insert it into the page
+      fetch('us.svg')
+        .then(resp => resp.text())
+        .then(svgText => {
+          document.getElementById('us-map').innerHTML = svgText;
+          // After inserting the SVG, initialise seatData and attach event listeners
+          const svgElement = document.querySelector('#us-map svg');
+          // Build seatData: contested states get 1, others 0
+          const paths = svgElement.querySelectorAll('path');
+
+          // helper to ensure there is a <defs> section on the SVG
+          function ensureDefs() {
+            let defs = svgElement.querySelector('defs');
+            if (!defs) {
+              defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+              svgElement.insertBefore(defs, svgElement.firstChild);
+            }
+            return defs;
+          }
+
+          // helper to create a split colour gradient for a state when its two
+          // non‑contested seats are held by different parties
+          function addSplitGradient(state, parties) {
+            const defs = ensureDefs();
+            const grad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+            grad.id = 'grad-' + state;
+            grad.setAttribute('x1', '0%');
+            grad.setAttribute('y1', '0%');
+            grad.setAttribute('x2', '100%');
+            grad.setAttribute('y2', '0%');
+            // first half colour
+            const s1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+            s1.setAttribute('offset', '0%');
+            s1.setAttribute('stop-color', darkColors[parties[0]]);
+            const s2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+            s2.setAttribute('offset', '50%');
+            s2.setAttribute('stop-color', darkColors[parties[0]]);
+            // second half colour
+            const s3 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+            s3.setAttribute('offset', '50%');
+            s3.setAttribute('stop-color', darkColors[parties[1]]);
+            const s4 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+            s4.setAttribute('offset', '100%');
+            s4.setAttribute('stop-color', darkColors[parties[1]]);
+            grad.appendChild(s1);
+            grad.appendChild(s2);
+            grad.appendChild(s3);
+            grad.appendChild(s4);
+            defs.appendChild(grad);
+          }
+
+          // Create (if necessary) and update a gradient used for contested states.
+          // The gradient splits the state in half: the first half uses the dark colour
+          // of the predetermined seat, and the second half reflects the user's
+          // current assignment for the contested seat.
+          function ensureContestedGradient(state) {
+            const defs = ensureDefs();
+            const gradId = `grad-${state}-contested`;
+            let grad = svgElement.querySelector(`#${gradId}`);
+            // Determine predetermined half colour
+            const predParty = predeterminedSeats[state];
+            const predColor = darkColors[predParty] || colors.noElection;
+            // Determine contested half colour (initially undecided)
+            const contParty = stateColors[state] || 'undecided';
+            const contColor = colors[contParty];
+            if (!grad) {
+              grad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+              grad.id = gradId;
+              grad.setAttribute('x1', '0%');
+              grad.setAttribute('y1', '0%');
+              grad.setAttribute('x2', '100%');
+              grad.setAttribute('y2', '0%');
+              const s1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+              s1.setAttribute('offset', '0%');
+              const s2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+              s2.setAttribute('offset', '50%');
+              const s3 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+              s3.setAttribute('offset', '50%');
+              const s4 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+              s4.setAttribute('offset', '100%');
+              grad.appendChild(s1);
+              grad.appendChild(s2);
+              grad.appendChild(s3);
+              grad.appendChild(s4);
+              defs.appendChild(grad);
+            }
+            // always update the stop colours
+            const stops = grad.querySelectorAll('stop');
+            stops[0].setAttribute('stop-color', predColor);
+            stops[1].setAttribute('stop-color', predColor);
+            stops[2].setAttribute('stop-color', contColor);
+            stops[3].setAttribute('stop-color', contColor);
+            return grad;
+          }
+
+          // Expose the contested gradient helper globally so it can be called
+          // from resetMap() and other functions defined outside this scope.
+          window.ensureContestedGradient = ensureContestedGradient;
+
+          // After defining our helpers, iterate over each state path to set initial
+          // colours and attach event handlers.  This logic must remain inside the
+          // SVG fetch callback so that `svgElement` and its children are available.
+          paths.forEach(path => {
+            const state = path.id;
+            if (!state) return;
+            // Determine if this state has a contested seat in 2026
+            seatData[state] = contestedStates.has(state) ? 1 : 0;
+            if (seatData[state] > 0) {
+              // Contested states start undecided and are coloured uniformly grey.
+              stateColors[state] = 'undecided';
+              path.style.fill = colors.undecided;
+            } else {
+              // States without a contested race are fixed: colour using predeterminedSeats
+              stateColors[state] = 'noElection';
+              const pre = predeterminedSeats[state];
+              if (pre) {
+                if (Array.isArray(pre)) {
+                  if (pre.length === 2 && pre[0] !== pre[1]) {
+                    // Two non‑contested seats with different parties: create a split gradient
+                    addSplitGradient(state, pre);
+                    path.style.fill = `url(#grad-${state})`;
+                  } else {
+                    // Both seats the same party
+                    const party = pre[0];
+                    path.style.fill = darkColors[party] || colors.noElection;
+                  }
+                } else {
+                  // Single predetermined seat (shouldn't occur for non‑contested states)
+                  path.style.fill = darkColors[pre] || colors.noElection;
+                }
+              } else {
+                // Fallback colour if no predetermined entry exists
+                path.style.fill = colors.noElection;
+              }
+            }
+            // Add click handler only for contested states
+            if (seatData[state] > 0) {
+              path.addEventListener('click', () => {
+                // Update the contested seat assignment
+                stateColors[state] = selectedParty;
+                // Colour the entire state with the party colour
+                path.style.fill = colors[selectedParty];
+                updateSeats();
+                updateDemographics(state);
+              });
+            }
+            // Tooltip show/hide
+            path.addEventListener('mousemove', e => {
+              tooltip.style.display = 'block';
+              tooltip.style.left = (e.pageX + 10) + 'px';
+              tooltip.style.top = (e.pageY + 10) + 'px';
+              if (seatData[state] > 0) {
+                tooltip.innerHTML = `${state} (1 seat)`;
+              } else {
+                tooltip.innerHTML = `${state} (no 2026 election)`;
+              }
+            });
+            path.addEventListener('mouseleave', () => {
+              tooltip.style.display = 'none';
+            });
+          });
+
+          // Update totals after the map has been initialised
+          updateSeats();
+        });
+    });
+  </script>
+</body>
+</html>
